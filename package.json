@@ -1,7 +1,7 @@
 {
   "name": "cairn",
-  "version": "0.1.0",
-  "description": "",
+  "version": "0.3.1",
+  "description": "A guided desktop app for running a local LLM privately on your own machine.",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -11,7 +11,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2"
