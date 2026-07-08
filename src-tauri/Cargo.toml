@@ -2,8 +2,10 @@
 name = "cairn"
 version = "0.3.1"
 description = "Cairn — a guided installer for running a local LLM privately on your machine"
-authors = ["Cairn contributors"]
-license = "Apache-2.0"
+authors = ["sparkly-quasar"]
+# Licensed under the PolyForm Noncommercial License 1.0.0 — see ../LICENSE.
+license-file = "../LICENSE"
+publish = false
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

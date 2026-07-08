@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Tauri command surface exposed to the Svelte frontend. Long-running work runs
 //! on the blocking pool so the UI thread stays responsive; progress is streamed
 //! via events (`ollama-install-progress`, `pull-progress`).

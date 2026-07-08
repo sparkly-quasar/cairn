@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Open WebUI lifecycle via Docker. Connects to the *native* Ollama on the host
 //! through `host.docker.internal:11434`.
 //!

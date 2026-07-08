@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 # Build installable binaries and attach them to a GitHub Release on every v* tag.
 #
 # macOS  → universal .dmg (Apple Silicon + Intel). Code-signing + notarization

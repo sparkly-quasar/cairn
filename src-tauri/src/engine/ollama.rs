@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Native Ollama: detection, install, and model pulls. Long operations stream
 //! their output to the frontend via Tauri events.
 

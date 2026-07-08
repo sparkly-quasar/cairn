@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Phase-3 "server mode": expose the local Open WebUI to other devices under an
 //! explicit, explained binding tier. The default is **Private** (localhost only)
 //! so nothing is reachable off-machine unless the user deliberately opts in.

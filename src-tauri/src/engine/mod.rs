@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Engine management: the native Ollama runtime and the Open WebUI chat UI.
 
 pub mod ollama;

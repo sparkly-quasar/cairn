@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Linux GPU detection: NVIDIA (CUDA) is the best case, AMD (ROCm) is flagged
 //! experimental unless a working rocm-smi reports VRAM.
 //!

@@ -125,5 +125,15 @@ Project layout:
 
 ## License
 
-Licensed under the [Apache License 2.0](./LICENSE). See [`NOTICE`](./NOTICE) for
-third-party components. Model weights are governed by their own licenses.
+Licensed under the **[PolyForm Noncommercial License 1.0.0](./LICENSE)**.
+
+You may use, modify, and share Cairn freely for **non-commercial** purposes
+(personal use, research, education, nonprofits, government). **Commercial use
+requires a separate commercial license — a contract with the author.** For
+commercial licensing, contact the author via
+[github.com/sparkly-quasar](https://github.com/sparkly-quasar).
+
+See [`NOTICE`](./NOTICE) for third-party components. Note that earlier releases
+(`v0.1.0`–`v0.3.1`) were published under Apache-2.0 and remain available under
+those terms; this license applies from the next release onward. Model weights are
+governed by their own licenses.

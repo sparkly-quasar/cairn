@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Phase-1 recommendation engine: pick ONE model for the detected hardware tier
 //! and rate how comfortably it will run. Baseline assumes a Q4 quant.
 //!

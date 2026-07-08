@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Hardware spec detection. Produces the `SystemProfile` consumed by the
 //! recommendation engine and the frontend "Your computer" screen.
 

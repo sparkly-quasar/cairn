@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 //! Phase-2 model catalog. A curated set of models (embedded at compile time as
 //! `catalog.json`) is rated against the detected machine so the Explore UI can
 //! show a per-model green / yellow / red badge and group models into use-case
