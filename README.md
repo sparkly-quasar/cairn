@@ -8,6 +8,27 @@ engine, and gives you a private chat app — with nothing leaving your computer.
 
 > **Status:** Phase 3. Simple mode + Explore catalog + Remote access. macOS + Linux.
 
+## Mission
+
+Cairn exists to put AI back in people's own hands.
+
+Today, using a capable AI model almost always means sending your words to someone
+else's datacenter — metered, logged, and outside your control. Yet open models have
+become good enough, and ordinary hardware capable enough, to run genuinely useful AI
+on the computer already sitting on your desk. The barrier is no longer capability —
+it's friction. Running a local model still demands a terminal, Docker know-how, and a
+dozen decisions most people shouldn't have to make.
+
+Cairn's job is to erase that friction: to make running your own private AI as
+approachable as installing any other app, so that privacy and independence aren't a
+luxury reserved for the technically fluent. We believe **local-first AI should be a
+default option, not the expert's workaround** — and that democratizing access to it
+opens the door to uses that centralized, cloud-metered AI will never serve well: the
+private, the offline, the personal, the underfunded, and the experimental.
+
+Not everything has to run in a datacenter. Cairn is a small step toward making sure it
+doesn't have to.
+
 ## How it works
 
 Cairn is a thin [Tauri](https://tauri.app) shell that orchestrates two engines it
