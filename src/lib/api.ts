@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: Apache-2.0
+// Typed wrappers around the Tauri command surface (see src-tauri/src/commands.rs).
+
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+
+export interface SystemProfile {
+  os: string;
+  arch: string;
+  ram_gb: number;
+  gpu_vendor: "apple" | "nvidia" | "amd" | "none";
+  gpu_name: string | null;
+  vram_gb: number;
+  cpu_cores: number;
+  free_disk_gb: number;
+  docker_present: boolean;
+  ollama_present: boolean;
+  gpu_experimental: boolean;
+}
+
+export interface Recommendation {
+  model_id: string;
+  display_name: string;
+  ollama_tag: string;
+  disk_gb: number;
+  min_ram_gb: number;
+  rating: "green" | "yellow" | "red";
+  rating_label: string;
+  reason: string;
+}
+
+export const detectSystem = () => invoke<SystemProfile>("detect_system");
+export const getRecommendation = () => invoke<Recommendation>("get_recommendation");
+export const isModelPresent = (tag: string) => invoke<boolean>("is_model_present", { tag });
+export const dockerRunning = () => invoke<boolean>("docker_running");
+export const installOllama = () => invoke<void>("install_ollama");
+export const pullModel = (tag: string) => invoke<void>("pull_model", { tag });
+export const ensureOpenWebui = () => invoke<string>("ensure_openwebui");
+export const openChat = (url: string) => invoke<void>("open_chat", { url });
+
+/** Subscribe to a streamed backend progress event. */
+export const onProgress = (
+  event: "ollama-install-progress" | "pull-progress",
+  cb: (line: string) => void,
+): Promise<UnlistenFn> => listen<string>(event, (e) => cb(e.payload));
