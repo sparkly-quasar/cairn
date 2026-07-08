@@ -4,6 +4,8 @@
   import {
     detectSystem,
     getRecommendation,
+    getCatalog,
+    getBundles,
     isModelPresent,
     installOllama,
     pullModel,
@@ -12,15 +14,37 @@
     onProgress,
     type SystemProfile,
     type Recommendation,
+    type RatedModel,
+    type Bundle,
   } from "$lib/api";
 
-  type Step = "welcome" | "specs" | "recommend" | "setup" | "done";
+  type Mode = "simple" | "explore";
+  type Step = "welcome" | "specs" | "recommend";
+  type Phase = "browse" | "setup" | "done";
   type TaskStatus = "pending" | "active" | "done" | "skipped" | "error";
 
+  const BENCH_URL = "https://lmarena.ai/leaderboard";
+
+  let mode = $state<Mode>("simple");
   let step = $state<Step>("welcome");
+  let phase = $state<Phase>("browse");
+
   let profile = $state<SystemProfile | null>(null);
   let rec = $state<Recommendation | null>(null);
   let loading = $state(false);
+
+  // Explore state
+  let bundles = $state<Bundle[]>([]);
+  let catalog = $state<RatedModel[]>([]);
+  let installed = $state<Set<string>>(new Set());
+  let activeBundle = $state<string | null>(null);
+  let exploreLoaded = $state(false);
+  let exploreLoading = $state(false);
+  let ackModel = $state<RatedModel | null>(null);
+
+  // Install pipeline state
+  let target = $state<{ tag: string; name: string } | null>(null);
+  let returnTo = $state<Mode>("simple");
   let setupError = $state<string | null>(null);
   let chatUrl = $state<string | null>(null);
   let log = $state<string[]>([]);
@@ -48,6 +72,12 @@
     log = [...log.slice(-200), line];
   }
 
+  async function ensureProfile(): Promise<SystemProfile> {
+    if (!profile) profile = await detectSystem();
+    return profile;
+  }
+
+  // ---- Simple mode ----
   async function goSpecs() {
     step = "specs";
     loading = true;
@@ -68,16 +98,69 @@
     }
   }
 
+  // ---- Explore mode ----
+  async function enterExplore() {
+    mode = "explore";
+    if (exploreLoaded || exploreLoading) return;
+    exploreLoading = true;
+    try {
+      await ensureProfile();
+      const [b, c] = await Promise.all([getBundles(), getCatalog()]);
+      bundles = b;
+      catalog = c;
+      const present = await Promise.all(
+        c.map(async (m) => [m.ollama_tag, await isModelPresent(m.ollama_tag)] as const),
+      );
+      installed = new Set(present.filter(([, p]) => p).map(([tag]) => tag));
+      exploreLoaded = true;
+    } finally {
+      exploreLoading = false;
+    }
+  }
+
+  function enterSimple() {
+    mode = "simple";
+  }
+
+  const visibleModels = $derived(
+    activeBundle ? catalog.filter((m) => m.use_cases.includes(activeBundle!)) : catalog,
+  );
+
+  function requestInstall(m: RatedModel) {
+    if (m.requires_ack) {
+      ackModel = m;
+    } else {
+      startInstall(m.ollama_tag, m.display_name);
+    }
+  }
+
+  function confirmAck() {
+    if (ackModel) {
+      const m = ackModel;
+      ackModel = null;
+      startInstall(m.ollama_tag, m.display_name);
+    }
+  }
+
+  // ---- Shared install pipeline ----
+  function startInstall(tag: string, name: string) {
+    target = { tag, name };
+    returnTo = mode;
+    runSetup();
+  }
+
   async function runSetup() {
-    if (!profile || !rec) return;
-    step = "setup";
+    if (!target) return;
+    phase = "setup";
     setupError = null;
     log = [];
     tasks.forEach((t) => setTask(t.key, "pending"));
 
     try {
+      const p = await ensureProfile();
+
       // 1 — Ollama engine
-      if (profile.ollama_present) {
+      if (p.ollama_present) {
         setTask("ollama", "skipped");
       } else {
         setTask("ollama", "active");
@@ -87,12 +170,13 @@
 
       // 2 — Model
       setTask("model", "active");
-      const present = await isModelPresent(rec.ollama_tag);
+      const present = await isModelPresent(target.tag);
       if (present) {
-        pushLog(`${rec.display_name} is already downloaded.`);
+        pushLog(`${target.name} is already downloaded.`);
       } else {
-        await pullModel(rec.ollama_tag);
+        await pullModel(target.tag);
       }
+      installed = new Set([...installed, target.tag]);
       setTask("model", "done");
 
       // 3 — Open WebUI
@@ -100,12 +184,17 @@
       chatUrl = await ensureOpenWebui();
       setTask("webui", "done");
 
-      step = "done";
+      phase = "done";
     } catch (err) {
       const active = tasks.find((t) => t.status === "active");
       if (active) setTask(active.key, "error");
       setupError = typeof err === "string" ? err : String(err);
     }
+  }
+
+  function finishInstall() {
+    phase = "browse";
+    mode = returnTo;
   }
 
   // ---- display helpers ----
@@ -115,11 +204,23 @@
     amd: "AMD GPU",
     none: "No dedicated GPU",
   };
+  const capMeta: Record<string, { icon: string; label: string }> = {
+    chat: { icon: "💬", label: "Chat" },
+    reasoning: { icon: "🧠", label: "Reasoning" },
+    code: { icon: "💻", label: "Code" },
+    vision: { icon: "👁️", label: "Vision" },
+    medical: { icon: "🩺", label: "Medical" },
+    multilingual: { icon: "🌍", label: "Multilingual" },
+    fast: { icon: "⚡", label: "Fast (MoE)" },
+    conversational: { icon: "🗣️", label: "Conversational" },
+  };
   const gb = (n: number) => `${n.toFixed(n < 10 ? 1 : 0)} GB`;
   const ratingClass = (r?: string) => (r === "green" ? "ok" : r === "yellow" ? "warn" : "bad");
   const statusIcon = (s: TaskStatus) =>
     s === "done" ? "✓" : s === "skipped" ? "–" : s === "error" ? "✕" : s === "active" ? "…" : "";
 </script>
+
+<svelte:window onkeydown={(e) => e.key === "Escape" && ackModel && (ackModel = null)} />
 
 <main>
   <header class="brand">
@@ -130,62 +231,145 @@
     <p class="tagline">Your own AI, running privately on this computer.</p>
   </header>
 
-  {#if step === "welcome"}
-    <section class="card">
-      <h2>Let's set up your private assistant</h2>
-      <p>
-        Cairn installs a local AI model and a chat app on your machine. Nothing you type
-        leaves your computer — it runs entirely offline once set up. This takes a few minutes.
-      </p>
-      <button class="primary" onclick={goSpecs}>Get started</button>
-    </section>
+  {#if phase === "browse"}
+    <nav class="modes" aria-label="Mode">
+      <button class:active={mode === "simple"} onclick={enterSimple}>Simple</button>
+      <button class:active={mode === "explore"} onclick={enterExplore}>Explore</button>
+    </nav>
   {/if}
 
-  {#if step === "specs"}
-    <section class="card">
-      <h2>Your computer</h2>
-      {#if loading || !profile}
-        <p class="muted">Checking your hardware…</p>
-      {:else}
-        <ul class="specs">
-          <li><span>Chip</span><strong>{profile.gpu_name ?? profile.arch}</strong></li>
-          <li><span>Memory</span><strong>{gb(profile.ram_gb)}</strong></li>
-          <li><span>Graphics</span><strong>{vendorLabel[profile.gpu_vendor]}{profile.gpu_experimental ? " (experimental)" : ""}</strong></li>
-          <li><span>Free disk</span><strong>{gb(profile.free_disk_gb)}</strong></li>
-          <li><span>Engine (Ollama)</span><strong class={profile.ollama_present ? "ok" : "warn"}>{profile.ollama_present ? "Ready" : "Will install"}</strong></li>
-          <li><span>Docker</span><strong class={profile.docker_present ? "ok" : "bad"}>{profile.docker_present ? "Ready" : "Not found"}</strong></li>
-        </ul>
-        {#if !profile.docker_present}
-          <p class="notice bad">Docker isn't installed. Cairn needs Docker Desktop to run the chat app. Install it from docker.com, then reopen Cairn.</p>
+  <!-- ============ SIMPLE MODE ============ -->
+  {#if phase === "browse" && mode === "simple"}
+    {#if step === "welcome"}
+      <section class="card">
+        <h2>Let's set up your private assistant</h2>
+        <p>
+          Cairn installs a local AI model and a chat app on your machine. Nothing you type
+          leaves your computer — it runs entirely offline once set up. This takes a few minutes.
+        </p>
+        <button class="primary" onclick={goSpecs}>Get started</button>
+        <button class="ghost" onclick={enterExplore}>Or browse all models</button>
+      </section>
+    {/if}
+
+    {#if step === "specs"}
+      <section class="card">
+        <h2>Your computer</h2>
+        {#if loading || !profile}
+          <p class="muted">Checking your hardware…</p>
+        {:else}
+          <ul class="specs">
+            <li><span>Chip</span><strong>{profile.gpu_name ?? profile.arch}</strong></li>
+            <li><span>Memory</span><strong>{gb(profile.ram_gb)}</strong></li>
+            <li><span>Graphics</span><strong>{vendorLabel[profile.gpu_vendor]}{profile.gpu_experimental ? " (experimental)" : ""}</strong></li>
+            <li><span>Free disk</span><strong>{gb(profile.free_disk_gb)}</strong></li>
+            <li><span>Engine (Ollama)</span><strong class={profile.ollama_present ? "ok" : "warn"}>{profile.ollama_present ? "Ready" : "Will install"}</strong></li>
+            <li><span>Docker</span><strong class={profile.docker_present ? "ok" : "bad"}>{profile.docker_present ? "Ready" : "Not found"}</strong></li>
+          </ul>
+          {#if !profile.docker_present}
+            <p class="notice bad">Docker isn't installed. Cairn needs Docker Desktop to run the chat app. Install it from docker.com, then reopen Cairn.</p>
+          {/if}
+          <button class="primary" onclick={goRecommend} disabled={!profile.docker_present}>Continue</button>
         {/if}
-        <button class="primary" onclick={goRecommend} disabled={!profile.docker_present}>Continue</button>
-      {/if}
-    </section>
-  {/if}
+      </section>
+    {/if}
 
-  {#if step === "recommend"}
-    <section class="card">
-      <h2>Recommended for your machine</h2>
-      {#if loading || !rec}
-        <p class="muted">Picking the best model…</p>
-      {:else}
-        <div class="model">
-          <div class="model-head">
-            <strong>{rec.display_name}</strong>
-            <span class="badge {ratingClass(rec.rating)}">{rec.rating_label}</span>
+    {#if step === "recommend"}
+      <section class="card">
+        <h2>Recommended for your machine</h2>
+        {#if loading || !rec}
+          <p class="muted">Picking the best model…</p>
+        {:else}
+          <div class="model">
+            <div class="model-head">
+              <strong>{rec.display_name}</strong>
+              <span class="badge {ratingClass(rec.rating)}">{rec.rating_label}</span>
+            </div>
+            <p>{rec.reason}</p>
+            <p class="muted small">Download size ≈ {gb(rec.disk_gb)}</p>
           </div>
-          <p>{rec.reason}</p>
-          <p class="muted small">Download size ≈ {gb(rec.disk_gb)}</p>
+          <button class="primary" onclick={() => rec && startInstall(rec.ollama_tag, rec.display_name)}>Set up my assistant</button>
+          <button class="ghost" onclick={goSpecs}>Back</button>
+        {/if}
+      </section>
+    {/if}
+  {/if}
+
+  <!-- ============ EXPLORE MODE ============ -->
+  {#if phase === "browse" && mode === "explore"}
+    <section class="card wide">
+      <div class="explore-head">
+        <h2>Model catalog</h2>
+        <button class="link" onclick={() => openChat(BENCH_URL)}>Compare models ↗</button>
+      </div>
+      <p class="muted small">
+        Each model is rated for your machine —
+        <span class="ok">green</span> fits comfortably,
+        <span class="warn">yellow</span> runs slower,
+        <span class="bad">red</span> is likely too big.
+      </p>
+
+      {#if exploreLoading || !exploreLoaded}
+        <p class="muted">Rating models for your hardware…</p>
+      {:else}
+        <div class="chips" role="tablist">
+          <button class="chip" class:active={activeBundle === null} onclick={() => (activeBundle = null)}>All</button>
+          {#each bundles as b (b.id)}
+            <button class="chip" class:active={activeBundle === b.id} onclick={() => (activeBundle = b.id)}>
+              {b.icon} {b.title}
+            </button>
+          {/each}
         </div>
-        <button class="primary" onclick={runSetup}>Set up my assistant</button>
-        <button class="ghost" onclick={goSpecs}>Back</button>
+
+        {#if activeBundle}
+          {@const bundle = bundles.find((b) => b.id === activeBundle)}
+          {#if bundle}<p class="bundle-blurb muted small">{bundle.blurb}</p>{/if}
+        {/if}
+
+        {#if !profile?.docker_present}
+          <p class="notice bad">Docker isn't running. Installs are disabled until Docker Desktop is available.</p>
+        {/if}
+
+        <div class="grid">
+          {#each visibleModels as m (m.id)}
+            <article class="mcard {ratingClass(m.rating)}">
+              <div class="mcard-head">
+                <div>
+                  <strong>{m.display_name}</strong>
+                  <span class="muted small">{m.params} · ≈ {gb(m.disk_gb)}</span>
+                </div>
+                <span class="badge {ratingClass(m.rating)}" title={m.reason}>{m.rating_label}</span>
+              </div>
+
+              <div class="caps">
+                {#each m.capabilities as c}
+                  <span class="cap">{capMeta[c]?.icon ?? ""} {capMeta[c]?.label ?? c}</span>
+                {/each}
+              </div>
+
+              <p class="mblurb">{m.blurb}</p>
+
+              <div class="mcard-foot">
+                {#if installed.has(m.ollama_tag)}
+                  <button class="primary small-btn" onclick={() => startInstall(m.ollama_tag, m.display_name)}>Installed · Open</button>
+                {:else}
+                  <button class="primary small-btn" disabled={!profile?.docker_present} onclick={() => requestInstall(m)}>
+                    {m.requires_ack ? "Install…" : "Install"}
+                  </button>
+                {/if}
+                <button class="link" onclick={() => openChat(m.library_url)}>Details ↗</button>
+              </div>
+            </article>
+          {/each}
+        </div>
       {/if}
     </section>
   {/if}
 
-  {#if step === "setup"}
+  <!-- ============ SHARED: SETUP / DONE ============ -->
+  {#if phase === "setup"}
     <section class="card">
-      <h2>Setting things up</h2>
+      <h2>Setting up {target?.name ?? "your model"}</h2>
       <ol class="tasks">
         {#each tasks as t (t.key)}
           <li class={t.status}>
@@ -203,18 +387,37 @@
       {#if setupError}
         <p class="notice bad">{setupError}</p>
         <button class="primary" onclick={runSetup}>Retry</button>
+        <button class="ghost" onclick={finishInstall}>Cancel</button>
       {/if}
     </section>
   {/if}
 
-  {#if step === "done"}
+  {#if phase === "done"}
     <section class="card success">
       <div class="check">✓</div>
       <h2>You're all set</h2>
-      <p>Your private assistant is running. Click below to start chatting in your browser.</p>
+      <p>{target?.name ?? "Your assistant"} is ready. Click below to start chatting in your browser.</p>
       <button class="primary" onclick={() => chatUrl && openChat(chatUrl)}>Open my assistant</button>
       {#if chatUrl}<p class="muted small">Running at {chatUrl}</p>{/if}
+      <button class="ghost" onclick={finishInstall}>{returnTo === "explore" ? "Back to catalog" : "Done"}</button>
     </section>
+  {/if}
+
+  <!-- ============ ACKNOWLEDGMENT MODAL ============ -->
+  {#if ackModel}
+    <div class="scrim" role="presentation" onclick={() => (ackModel = null)} onkeydown={(e) => e.key === "Escape" && (ackModel = null)}>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ack-title" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+        <h2 id="ack-title">{ackModel.requires_ack?.headline}</h2>
+        <p class="muted small">Before installing {ackModel.display_name}, please read and accept:</p>
+        <ul class="ack">
+          {#each ackModel.requires_ack?.points ?? [] as pt}
+            <li>{pt}</li>
+          {/each}
+        </ul>
+        <button class="primary" onclick={confirmAck}>I understand — install anyway</button>
+        <button class="ghost" onclick={() => (ackModel = null)}>Cancel</button>
+      </div>
+    </div>
   {/if}
 
   <footer>Local-first · Apache-2.0 · Cairn</footer>
@@ -256,7 +459,7 @@
   }
 
   main {
-    max-width: 560px;
+    max-width: 820px;
     margin: 0 auto;
     padding: 2.4rem 1.5rem 1.5rem;
     display: flex;
@@ -266,7 +469,7 @@
     box-sizing: border-box;
   }
 
-  .brand { text-align: center; margin-bottom: 1.6rem; }
+  .brand { text-align: center; margin-bottom: 1rem; }
   .cairn { display: flex; flex-direction: column; align-items: center; gap: 3px; margin-bottom: 0.5rem; }
   .cairn span {
     display: block; background: var(--accent); border-radius: 40%;
@@ -277,8 +480,21 @@
   h1 { margin: 0.2rem 0 0; font-size: 1.9rem; letter-spacing: -0.02em; }
   .tagline { margin: 0.3rem 0 0; color: var(--muted); }
 
+  .modes {
+    display: inline-flex; gap: 4px; margin-bottom: 1.4rem;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px;
+  }
+  .modes button {
+    border: none; background: transparent; color: var(--muted);
+    padding: 0.4rem 1.1rem; border-radius: 999px; font: inherit; font-weight: 600;
+    cursor: pointer;
+  }
+  .modes button.active { background: var(--accent); color: var(--accent-ink); }
+
   .card {
     width: 100%;
+    max-width: 560px;
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 16px;
@@ -286,6 +502,7 @@
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
     box-sizing: border-box;
   }
+  .card.wide { max-width: 100%; }
   h2 { margin: 0 0 0.7rem; font-size: 1.25rem; }
   p { line-height: 1.55; }
   .muted { color: var(--muted); }
@@ -307,6 +524,11 @@
     display: block; width: 100%; margin-top: 0.6rem;
     background: transparent; color: var(--muted); border-color: var(--line);
   }
+  .link {
+    background: none; border: none; color: var(--accent);
+    padding: 0; font-weight: 600; cursor: pointer;
+  }
+  .link:hover { text-decoration: underline; }
 
   .specs { list-style: none; padding: 0; margin: 0.5rem 0 0; }
   .specs li {
@@ -324,14 +546,46 @@
   .model-head strong { font-size: 1.15rem; }
   .badge {
     font-size: 0.75rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 999px;
-    border: 1px solid currentColor;
+    border: 1px solid currentColor; white-space: nowrap;
   }
   .badge.ok { color: var(--ok); }
   .badge.warn { color: var(--warn); }
   .badge.bad { color: var(--bad); }
 
-  .notice { border-radius: 10px; padding: 0.7rem 0.9rem; font-size: 0.92rem; }
+  .notice { border-radius: 10px; padding: 0.7rem 0.9rem; font-size: 0.92rem; margin-top: 0.8rem; }
   .notice.bad { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+
+  /* ---- Explore ---- */
+  .explore-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0 0.4rem; }
+  .chip {
+    background: transparent; border: 1px solid var(--line); color: var(--muted);
+    padding: 0.4rem 0.8rem; border-radius: 999px; font-size: 0.85rem; font-weight: 600;
+  }
+  .chip.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .bundle-blurb { margin: 0.4rem 0 0; }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.9rem; margin-top: 1rem;
+  }
+  .mcard {
+    border: 1px solid var(--line); border-radius: 12px; padding: 1rem;
+    display: flex; flex-direction: column; gap: 0.55rem;
+    background: color-mix(in srgb, var(--ink) 2%, transparent);
+  }
+  .mcard.bad { opacity: 0.72; }
+  .mcard-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+  .mcard-head strong { display: block; font-size: 1.02rem; }
+  .mcard-head .small { display: block; margin-top: 0.1rem; }
+  .caps { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .cap {
+    font-size: 0.72rem; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 6px; padding: 0.1rem 0.4rem;
+  }
+  .mblurb { margin: 0; font-size: 0.88rem; line-height: 1.45; color: var(--ink); }
+  .mcard-foot { display: flex; align-items: center; gap: 0.8rem; margin-top: auto; }
+  .small-btn { width: auto; margin: 0; padding: 0.5rem 0.9rem; font-size: 0.88rem; flex: 1; }
 
   .tasks { list-style: none; padding: 0; margin: 0; }
   .tasks li {
@@ -362,6 +616,20 @@
     background: var(--ok); color: #fff; font-size: 1.8rem;
     display: grid; place-items: center;
   }
+
+  /* ---- Modal ---- */
+  .scrim {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+    display: grid; place-items: center; padding: 1.5rem; z-index: 10;
+  }
+  .modal {
+    width: 100%; max-width: 440px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 16px; padding: 1.6rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+  .modal h2 { color: var(--bad); }
+  .ack { margin: 0.8rem 0 0; padding-left: 1.1rem; }
+  .ack li { margin: 0.4rem 0; line-height: 1.45; font-size: 0.92rem; }
 
   footer { margin-top: auto; padding-top: 1.5rem; color: var(--muted); font-size: 0.8rem; }
 </style>

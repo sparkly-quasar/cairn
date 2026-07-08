@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
+mod catalog;
 mod commands;
 mod engine;
+mod rating;
 mod recommend;
 mod spec;
 mod util;
@@ -13,6 +15,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::detect_system,
             commands::get_recommendation,
+            commands::get_catalog,
+            commands::get_bundles,
             commands::is_model_present,
             commands::docker_running,
             commands::install_ollama,

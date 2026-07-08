@@ -29,8 +29,40 @@ export interface Recommendation {
   reason: string;
 }
 
+export interface Ack {
+  headline: string;
+  points: string[];
+}
+
+export interface RatedModel {
+  id: string;
+  display_name: string;
+  ollama_tag: string;
+  params: string;
+  disk_gb: number;
+  min_ram_gb: number;
+  capabilities: string[];
+  use_cases: string[];
+  blurb: string;
+  license: string;
+  library_url: string;
+  requires_ack: Ack | null;
+  rating: "green" | "yellow" | "red";
+  rating_label: string;
+  reason: string;
+}
+
+export interface Bundle {
+  id: string;
+  icon: string;
+  title: string;
+  blurb: string;
+}
+
 export const detectSystem = () => invoke<SystemProfile>("detect_system");
 export const getRecommendation = () => invoke<Recommendation>("get_recommendation");
+export const getCatalog = () => invoke<RatedModel[]>("get_catalog");
+export const getBundles = () => invoke<Bundle[]>("get_bundles");
 export const isModelPresent = (tag: string) => invoke<boolean>("is_model_present", { tag });
 export const dockerRunning = () => invoke<boolean>("docker_running");
 export const installOllama = () => invoke<void>("install_ollama");

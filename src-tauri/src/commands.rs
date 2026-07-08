@@ -3,6 +3,7 @@
 //! on the blocking pool so the UI thread stays responsive; progress is streamed
 //! via events (`ollama-install-progress`, `pull-progress`).
 
+use crate::catalog::{self, Bundle, RatedModel};
 use crate::engine::{self, ollama, openwebui};
 use crate::recommend::{self, Recommendation};
 use crate::spec::{self, SystemProfile};
@@ -20,6 +21,18 @@ pub async fn get_recommendation() -> Recommendation {
     tauri::async_runtime::spawn_blocking(|| recommend::recommend(&spec::detect()))
         .await
         .expect("recommendation panicked")
+}
+
+#[tauri::command]
+pub async fn get_catalog() -> Vec<RatedModel> {
+    tauri::async_runtime::spawn_blocking(|| catalog::catalog(&spec::detect()))
+        .await
+        .expect("catalog rating panicked")
+}
+
+#[tauri::command]
+pub fn get_bundles() -> Vec<Bundle> {
+    catalog::bundles()
 }
 
 #[tauri::command]
