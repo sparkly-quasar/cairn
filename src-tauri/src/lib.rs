@@ -5,6 +5,7 @@ mod commands;
 mod engine;
 mod rating;
 mod recommend;
+mod server;
 mod spec;
 mod util;
 
@@ -22,6 +23,9 @@ pub fn run() {
             commands::install_ollama,
             commands::pull_model,
             commands::ensure_openwebui,
+            commands::server_status,
+            commands::set_server_tier,
+            commands::qr_svg,
             commands::open_chat,
         ])
         .run(tauri::generate_context!())

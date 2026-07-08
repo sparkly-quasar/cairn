@@ -6,6 +6,7 @@
 use crate::catalog::{self, Bundle, RatedModel};
 use crate::engine::{self, ollama, openwebui};
 use crate::recommend::{self, Recommendation};
+use crate::server::{self, BindTier, ServerStatus};
 use crate::spec::{self, SystemProfile};
 use tauri::AppHandle;
 
@@ -66,6 +67,25 @@ pub async fn ensure_openwebui() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(openwebui::ensure)
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn server_status() -> ServerStatus {
+    tauri::async_runtime::spawn_blocking(openwebui::current_status)
+        .await
+        .expect("server status panicked")
+}
+
+#[tauri::command]
+pub async fn set_server_tier(tier: BindTier) -> Result<ServerStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || openwebui::set_tier(tier))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn qr_svg(text: String) -> Result<String, String> {
+    server::qr_svg(&text)
 }
 
 /// Open a URL in the user's default browser (native, outside the app window).

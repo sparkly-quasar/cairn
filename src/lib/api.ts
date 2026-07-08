@@ -59,6 +59,26 @@ export interface Bundle {
   blurb: string;
 }
 
+export type BindTier = "private" | "lan" | "tailscale";
+
+export interface TailscaleInfo {
+  installed: boolean;
+  running: boolean;
+  ipv4: string | null;
+  dns_name: string | null;
+}
+
+export interface ServerStatus {
+  tier: BindTier;
+  running: boolean;
+  port: number | null;
+  private_url: string | null;
+  lan_ip: string | null;
+  lan_url: string | null;
+  tailscale: TailscaleInfo;
+  tailscale_url: string | null;
+}
+
 export const detectSystem = () => invoke<SystemProfile>("detect_system");
 export const getRecommendation = () => invoke<Recommendation>("get_recommendation");
 export const getCatalog = () => invoke<RatedModel[]>("get_catalog");
@@ -68,6 +88,9 @@ export const dockerRunning = () => invoke<boolean>("docker_running");
 export const installOllama = () => invoke<void>("install_ollama");
 export const pullModel = (tag: string) => invoke<void>("pull_model", { tag });
 export const ensureOpenWebui = () => invoke<string>("ensure_openwebui");
+export const serverStatus = () => invoke<ServerStatus>("server_status");
+export const setServerTier = (tier: BindTier) => invoke<ServerStatus>("set_server_tier", { tier });
+export const qrSvg = (text: string) => invoke<string>("qr_svg", { text });
 export const openChat = (url: string) => invoke<void>("open_chat", { url });
 
 /** Subscribe to a streamed backend progress event. */

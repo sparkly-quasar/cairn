@@ -6,7 +6,7 @@ Cairn sits between GPT4All and Jan.ai in simplicity, with a power-user "engine
 room" underneath. It detects your hardware, installs and manages a local model
 engine, and gives you a private chat app — with nothing leaving your computer.
 
-> **Status:** Phase 2. Simple mode + Explore catalog. macOS + Linux.
+> **Status:** Phase 3. Simple mode + Explore catalog + Remote access. macOS + Linux.
 
 ## How it works
 
@@ -43,6 +43,16 @@ access Metal on Apple Silicon. Open WebUI runs in Docker for a reliable chat UI.
 - One-click install of any model into the same chat app. Models with special terms
   (e.g. MedGemma) require an on-screen acknowledgment first.
 
+**Remote access** — reach your AI from other devices (Phase 3):
+
+- **Private by default** — the chat app is published only on `127.0.0.1`, so nothing
+  is reachable off-machine unless you opt in.
+- Three explained **binding tiers**: 🔒 Private (this computer), 🏠 Local network
+  (devices on your Wi-Fi), 🌐 Tailscale (your devices anywhere, encrypted).
+- Switching tier rebinds the container; the active address is shown with a **QR code**
+  to scan from a companion/remote client. Tailscale is detect-and-guide (Cairn reads
+  `tailscale status` but never logs you in).
+
 ## Requirements
 
 - macOS (Apple Silicon or Intel) or Linux
@@ -61,7 +71,8 @@ npm run tauri build    # produce a .dmg / AppImage / .deb / .rpm
 Project layout:
 
 - `src-tauri/src/spec/` — hardware detection (`SystemProfile`)
-- `src-tauri/src/engine/` — Ollama + Open WebUI lifecycle
+- `src-tauri/src/engine/` — Ollama + Open WebUI lifecycle (per-tier container binding)
+- `src-tauri/src/server.rs` — remote-access binding tiers, Tailscale/LAN discovery, QR
 - `src-tauri/src/rating.rs` — shared "will it run?" 🟢/🟡/🔴 rating logic
 - `src-tauri/src/recommend.rs` — hardware-tier single-pick (Simple mode)
 - `src-tauri/src/catalog.rs` + `catalog.json` — the Explore-mode model catalog
@@ -72,7 +83,8 @@ Project layout:
 
 - **Phase 2** ✅ — model catalog + capability cards, use-case bundles, MedGemma (with
   medical-use disclaimers).
-- **Phase 3** — server mode (LAN / Tailscale) for remote access from the Conduit app.
+- **Phase 3** ✅ — server mode (Private / LAN / Tailscale) for remote access from the
+  Conduit app, with per-tier binding and QR pairing.
 - **Phase 4** — advanced mode (quantization, context length, logs), and a bundled
   Python sidecar to drop the Docker dependency. App self-update via Tauri's updater.
 

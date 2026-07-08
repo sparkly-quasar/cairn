@@ -10,15 +10,20 @@
     installOllama,
     pullModel,
     ensureOpenWebui,
+    serverStatus,
+    setServerTier,
+    qrSvg,
     openChat,
     onProgress,
     type SystemProfile,
     type Recommendation,
     type RatedModel,
     type Bundle,
+    type ServerStatus,
+    type BindTier,
   } from "$lib/api";
 
-  type Mode = "simple" | "explore";
+  type Mode = "simple" | "explore" | "remote";
   type Step = "welcome" | "specs" | "recommend";
   type Phase = "browse" | "setup" | "done";
   type TaskStatus = "pending" | "active" | "done" | "skipped" | "error";
@@ -41,6 +46,12 @@
   let exploreLoaded = $state(false);
   let exploreLoading = $state(false);
   let ackModel = $state<RatedModel | null>(null);
+
+  // Remote-access state
+  let srv = $state<ServerStatus | null>(null);
+  let srvLoading = $state(false);
+  let srvApplying = $state(false);
+  let qrMarkup = $state<string | null>(null);
 
   // Install pipeline state
   let target = $state<{ tag: string; name: string } | null>(null);
@@ -121,6 +132,49 @@
   function enterSimple() {
     mode = "simple";
   }
+
+  // ---- Remote access ----
+  async function enterRemote() {
+    mode = "remote";
+    srvLoading = true;
+    try {
+      srv = await serverStatus();
+      await refreshQr();
+    } finally {
+      srvLoading = false;
+    }
+  }
+
+  /** URL other devices use for the current tier (null for Private / not running). */
+  function remoteUrl(s: ServerStatus | null): string | null {
+    if (!s || !s.running) return null;
+    if (s.tier === "lan") return s.lan_url;
+    if (s.tier === "tailscale") return s.tailscale_url;
+    return null;
+  }
+
+  async function refreshQr() {
+    const url = remoteUrl(srv);
+    qrMarkup = url ? await qrSvg(url) : null;
+  }
+
+  async function chooseTier(tier: BindTier) {
+    if (!srv || srv.tier === tier || srvApplying) return;
+    srvApplying = true;
+    qrMarkup = null;
+    try {
+      srv = await setServerTier(tier);
+      await refreshQr();
+    } finally {
+      srvApplying = false;
+    }
+  }
+
+  const tierCards: { id: BindTier; icon: string; title: string; who: string }[] = [
+    { id: "private", icon: "🔒", title: "Private", who: "Only this computer" },
+    { id: "lan", icon: "🏠", title: "Local network", who: "Devices on your Wi-Fi" },
+    { id: "tailscale", icon: "🌐", title: "Tailscale", who: "Your devices, anywhere (encrypted)" },
+  ];
 
   const visibleModels = $derived(
     activeBundle ? catalog.filter((m) => m.use_cases.includes(activeBundle!)) : catalog,
@@ -235,6 +289,7 @@
     <nav class="modes" aria-label="Mode">
       <button class:active={mode === "simple"} onclick={enterSimple}>Simple</button>
       <button class:active={mode === "explore"} onclick={enterExplore}>Explore</button>
+      <button class:active={mode === "remote"} onclick={enterRemote}>Remote</button>
     </nav>
   {/if}
 
@@ -362,6 +417,93 @@
             </article>
           {/each}
         </div>
+      {/if}
+    </section>
+  {/if}
+
+  <!-- ============ REMOTE ACCESS ============ -->
+  {#if phase === "browse" && mode === "remote"}
+    <section class="card">
+      <h2>Remote access</h2>
+      {#if srvLoading || !srv}
+        <p class="muted">Checking your server…</p>
+      {:else if !srv.running}
+        <p>
+          Your assistant isn't running yet. Set it up first, then come back here to
+          make it reachable from your other devices.
+        </p>
+        <button class="primary" onclick={() => { mode = "simple"; step = "welcome"; }}>Go to setup</button>
+      {:else}
+        <p class="muted small">
+          By default your AI is private to this computer. Choose who else can reach it:
+        </p>
+
+        <div class="tiers">
+          {#each tierCards as t (t.id)}
+            <button
+              class="tier"
+              class:active={srv.tier === t.id}
+              disabled={srvApplying}
+              onclick={() => chooseTier(t.id)}
+            >
+              <span class="tier-icon">{t.icon}</span>
+              <span class="tier-body">
+                <strong>{t.title}</strong>
+                <span class="muted small">{t.who}</span>
+              </span>
+              {#if srv.tier === t.id}<span class="tier-dot">●</span>{/if}
+            </button>
+          {/each}
+        </div>
+
+        {#if srvApplying}
+          <p class="muted small">Applying — restarting the chat server…</p>
+        {/if}
+
+        <!-- Connection details for the active tier -->
+        {#if srv.tier === "private"}
+          <div class="conn">
+            <p>Reachable only on this computer.</p>
+            {#if srv.private_url}<p class="muted small">Open at {srv.private_url}</p>{/if}
+          </div>
+        {:else if srv.tier === "lan"}
+          {#if srv.lan_url}
+            <div class="conn">
+              <p class="url">{srv.lan_url}</p>
+              <p class="muted small">Any device on your Wi-Fi can open this address.</p>
+              {#if qrMarkup}<div class="qr">{@html qrMarkup}</div>{/if}
+            </div>
+          {:else}
+            <p class="notice bad">Couldn't determine your local network address.</p>
+          {/if}
+        {:else if srv.tier === "tailscale"}
+          {#if !srv.tailscale.installed}
+            <p class="notice bad">
+              Tailscale isn't installed. Install it from tailscale.com, sign in, then reopen this tab.
+            </p>
+          {:else if !srv.tailscale.running}
+            <p class="notice bad">
+              Tailscale is installed but not connected. Run <code>tailscale up</code> and sign in, then reopen this tab.
+            </p>
+          {:else if srv.tailscale_url}
+            <div class="conn">
+              <p class="url">{srv.tailscale_url}</p>
+              <p class="muted small">Reachable from any of your Tailscale devices, encrypted end-to-end.</p>
+              {#if qrMarkup}<div class="qr">{@html qrMarkup}</div>{/if}
+            </div>
+          {/if}
+        {/if}
+
+        {#if srv.tier !== "private"}
+          <p class="notice warn-box">
+            Anyone who can reach this address can use your assistant. Make sure you've created a
+            password in Open WebUI — the first account you register becomes the admin.
+          </p>
+        {/if}
+
+        {#if remoteUrl(srv)}
+          <button class="ghost" onclick={() => { const u = remoteUrl(srv); if (u) openChat(u); }}>Open this address here</button>
+        {/if}
       {/if}
     </section>
   {/if}
@@ -554,6 +696,35 @@
 
   .notice { border-radius: 10px; padding: 0.7rem 0.9rem; font-size: 0.92rem; margin-top: 0.8rem; }
   .notice.bad { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+  .notice.warn-box { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em;
+    background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 0.1rem 0.35rem; border-radius: 5px;
+  }
+
+  /* ---- Remote access ---- */
+  .tiers { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }
+  .tier {
+    display: flex; align-items: center; gap: 0.8rem; text-align: left; width: 100%;
+    background: transparent; border: 1px solid var(--line); border-radius: 12px; padding: 0.8rem 1rem;
+  }
+  .tier.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .tier:disabled { opacity: 0.55; cursor: progress; }
+  .tier-icon { font-size: 1.4rem; }
+  .tier-body { display: flex; flex-direction: column; }
+  .tier-body strong { font-size: 1rem; }
+  .tier-dot { margin-left: auto; color: var(--accent); }
+
+  .conn { margin-top: 0.8rem; }
+  .conn .url {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600;
+    word-break: break-all; margin: 0 0 0.2rem;
+  }
+  .qr {
+    width: 200px; max-width: 100%; margin: 0.9rem auto 0; padding: 12px;
+    background: #ffffff; border-radius: 10px; box-sizing: border-box;
+  }
+  .qr :global(svg) { display: block; width: 100%; height: auto; }
 
   /* ---- Explore ---- */
   .explore-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
