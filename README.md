@@ -97,8 +97,10 @@ You'll still need Docker running for the chat UI (see Requirements).
 **To update:** download the latest release and install it over the old version.
 Cairn only *manages* Ollama and the Open WebUI container — your models and chat
 history live in those (not in the Cairn app), so updating Cairn won't touch them.
-Check the [Releases page](https://github.com/sparkly-quasar/cairn/releases) for new
-versions; in-app auto-update isn't wired up yet.
+**From the next release on, Cairn checks for updates on launch** and offers to
+install them in place ("Install & restart") — signed and verified, fully in-app.
+(Releases up to v0.3.1 predate the updater, so update once manually; after that it's
+automatic.)
 
 ## Development
 

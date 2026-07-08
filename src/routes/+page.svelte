@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0 -->
 <script lang="ts">
   import { onMount } from "svelte";
+  import { check, type Update } from "@tauri-apps/plugin-updater";
+  import { relaunch } from "@tauri-apps/plugin-process";
   import {
     detectSystem,
     getRecommendation,
@@ -60,6 +62,12 @@
   let chatUrl = $state<string | null>(null);
   let log = $state<string[]>([]);
 
+  // app self-update
+  let update = $state<Update | null>(null);
+  let updateBusy = $state(false);
+  let updateMsg = $state("");
+  let updateDismissed = $state(false);
+
   let tasks = $state<{ key: string; label: string; status: TaskStatus }[]>([
     { key: "ollama", label: "Prepare the engine (Ollama)", status: "pending" },
     { key: "model", label: "Download your model", status: "pending" },
@@ -71,12 +79,37 @@
   }
 
   onMount(() => {
+    checkForUpdate();
     const unlisteners = [
       onProgress("ollama-install-progress", pushLog),
       onProgress("pull-progress", pushLog),
     ];
     return () => unlisteners.forEach((p) => p.then((u) => u()));
   });
+
+  async function checkForUpdate() {
+    try {
+      update = await check();
+    } catch (_) {
+      // offline, or no published release with an updater manifest yet — ignore
+    }
+  }
+
+  async function installUpdate() {
+    if (!update) return;
+    updateBusy = true;
+    updateMsg = "Downloading…";
+    try {
+      await update.downloadAndInstall((e) => {
+        if (e.event === "Finished") updateMsg = "Installing…";
+      });
+      updateMsg = "Restarting…";
+      await relaunch();
+    } catch (e) {
+      updateMsg = `Update failed: ${typeof e === "string" ? e : String(e)}`;
+      updateBusy = false;
+    }
+  }
 
   function pushLog(line: string) {
     if (!line.trim()) return;
@@ -277,6 +310,19 @@
 <svelte:window onkeydown={(e) => e.key === "Escape" && ackModel && (ackModel = null)} />
 
 <main>
+  {#if update && !updateDismissed}
+    <div class="update-banner">
+      <span>A new version <strong>v{update.version}</strong> of Cairn is available.</span>
+      {#if updateBusy}
+        <span class="muted small">{updateMsg}</span>
+      {:else}
+        <span class="banner-actions">
+          <button class="primary" onclick={installUpdate}>Install &amp; restart</button>
+          <button class="ghost" onclick={() => (updateDismissed = true)}>Later</button>
+        </span>
+      {/if}
+    </div>
+  {/if}
   <header class="brand">
     <div class="cairn" aria-hidden="true">
       <span></span><span></span><span></span>
@@ -562,7 +608,7 @@
     </div>
   {/if}
 
-  <footer>Local-first · Apache-2.0 · Cairn</footer>
+  <footer>Local-first · PolyForm Noncommercial · Cairn</footer>
 </main>
 
 <style>
@@ -801,6 +847,15 @@
   .modal h2 { color: var(--bad); }
   .ack { margin: 0.8rem 0 0; padding-left: 1.1rem; }
   .ack li { margin: 0.4rem 0; line-height: 1.45; font-size: 0.92rem; }
+
+  .update-banner {
+    width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 0.8rem;
+    align-items: center; justify-content: space-between; margin-bottom: 1.2rem;
+    border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-radius: 12px; padding: 0.7rem 1rem; font-size: 0.9rem;
+  }
+  .banner-actions { display: inline-flex; gap: 0.5rem; }
+  .update-banner button { width: auto; margin: 0; padding: 0.45rem 0.9rem; font-size: 0.85rem; }
 
   footer { margin-top: auto; padding-top: 1.5rem; color: var(--muted); font-size: 0.8rem; }
 </style>
