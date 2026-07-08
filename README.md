@@ -80,6 +80,20 @@ access Metal on Apple Silicon. Open WebUI runs in Docker for a reliable chat UI.
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for the chat UI)
 - Internet connection for the initial download (runs offline afterward)
 
+## Install
+
+Prebuilt installers are attached to each
+[release](https://github.com/sparkly-quasar/cairn/releases):
+
+- **macOS** — download the `.dmg`, open it, and drag Cairn to Applications. These
+  builds aren't notarized yet, so on first launch **right-click the app and choose
+  Open** (or run `xattr -dr com.apple.quarantine /Applications/Cairn.app`) to get past
+  Gatekeeper. It opens normally after that.
+- **Linux** — download the `.AppImage` (make it executable and run it), or the `.deb`
+  / `.rpm` for your distribution.
+
+You'll still need Docker running for the chat UI (see Requirements).
+
 ## Development
 
 ```bash
