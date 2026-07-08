@@ -1,6 +1,6 @@
 {
   "name": "cairn",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "A guided desktop app for running a local LLM privately on your own machine.",
   "type": "module",
   "scripts": {
