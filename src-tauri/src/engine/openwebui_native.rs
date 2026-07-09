@@ -267,6 +267,13 @@ fn spawn(uv: &str, port: u16, tier: BindTier) -> Result<String, String> {
             "--port",
             &port.to_string(),
         ])
+        // Run from the data dir. Open WebUI writes `.webui_secret_key` relative
+        // to the working directory, and a Finder/Dock-launched app inherits
+        // CWD `/` (the read-only system volume) — so without this the server
+        // crashes on first boot with "Read-only file system: /.webui_secret_key".
+        // Anchoring CWD here keeps that (and any other relative paths) writable
+        // and persistent alongside the rest of Open WebUI's data.
+        .current_dir(&dir)
         .env("DATA_DIR", &dir)
         .env("OLLAMA_BASE_URL", OLLAMA_URL)
         .env("ANONYMIZED_TELEMETRY", "false")
@@ -337,7 +344,10 @@ fn port_answers(port: u16) -> bool {
 }
 
 fn url(port: u16) -> String {
-    format!("http://localhost:{port}")
+    // Use 127.0.0.1, not `localhost`: it's the exact interface `wait_until_ready`
+    // probes and the server binds for the Private tier, so we never hand the
+    // browser a `localhost` that resolves to IPv6 `::1` and refuses.
+    format!("http://127.0.0.1:{port}")
 }
 
 /// First bindable port at/above `preferred`, so we skip anything in use.
