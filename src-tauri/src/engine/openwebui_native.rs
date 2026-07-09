@@ -23,7 +23,7 @@ use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
 
@@ -254,7 +254,7 @@ fn spawn(uv: &str, port: u16, tier: BindTier) -> Result<String, String> {
     let err_log = log.try_clone().map_err(|e| e.to_string())?;
 
     let host = tier.bind_host();
-    let child = Command::new(uv)
+    let child = crate::util::command(uv)
         .args([
             "tool",
             "run",
