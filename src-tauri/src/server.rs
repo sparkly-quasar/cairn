@@ -3,9 +3,9 @@
 //! explicit, explained binding tier. The default is **Private** (localhost only)
 //! so nothing is reachable off-machine unless the user deliberately opts in.
 //!
-//! - Private   → container publishes on 127.0.0.1 (this computer only)
-//! - Lan       → publishes on 0.0.0.0, reachable at the machine's LAN IP
-//! - Tailscale → publishes on 0.0.0.0, reached via the tailnet (MagicDNS) name
+//! - Private   → Open WebUI binds 127.0.0.1 (this computer only)
+//! - Lan       → binds 0.0.0.0, reachable at the machine's LAN IP
+//! - Tailscale → binds 0.0.0.0, reached via the tailnet (MagicDNS) name
 //!
 //! Tailscale is detect-and-guide only: we read `tailscale status` but never run
 //! `tailscale up` ourselves.
@@ -23,7 +23,7 @@ pub enum BindTier {
 }
 
 impl BindTier {
-    /// Host address Docker should publish the container port on.
+    /// Host address Open WebUI's `serve --host` should bind to.
     pub fn bind_host(self) -> &'static str {
         match self {
             BindTier::Private => "127.0.0.1",

@@ -21,12 +21,12 @@ pub fn run() {
             commands::get_catalog,
             commands::get_bundles,
             commands::is_model_present,
-            commands::docker_running,
             commands::install_ollama,
             commands::pull_model,
             commands::ensure_openwebui,
             commands::server_status,
             commands::set_server_tier,
+            commands::uninstall_openwebui,
             commands::qr_svg,
             commands::open_chat,
         ])

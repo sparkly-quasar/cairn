@@ -13,7 +13,7 @@ export interface SystemProfile {
   vram_gb: number;
   cpu_cores: number;
   free_disk_gb: number;
-  docker_present: boolean;
+  uv_present: boolean;
   ollama_present: boolean;
   gpu_experimental: boolean;
 }
@@ -68,6 +68,11 @@ export interface TailscaleInfo {
   dns_name: string | null;
 }
 
+export interface UninstallReport {
+  removed: string[];
+  note: string;
+}
+
 export interface ServerStatus {
   tier: BindTier;
   running: boolean;
@@ -84,17 +89,17 @@ export const getRecommendation = () => invoke<Recommendation>("get_recommendatio
 export const getCatalog = () => invoke<RatedModel[]>("get_catalog");
 export const getBundles = () => invoke<Bundle[]>("get_bundles");
 export const isModelPresent = (tag: string) => invoke<boolean>("is_model_present", { tag });
-export const dockerRunning = () => invoke<boolean>("docker_running");
 export const installOllama = () => invoke<void>("install_ollama");
 export const pullModel = (tag: string) => invoke<void>("pull_model", { tag });
 export const ensureOpenWebui = () => invoke<string>("ensure_openwebui");
 export const serverStatus = () => invoke<ServerStatus>("server_status");
 export const setServerTier = (tier: BindTier) => invoke<ServerStatus>("set_server_tier", { tier });
+export const uninstallOpenwebui = () => invoke<UninstallReport>("uninstall_openwebui");
 export const qrSvg = (text: string) => invoke<string>("qr_svg", { text });
 export const openChat = (url: string) => invoke<void>("open_chat", { url });
 
 /** Subscribe to a streamed backend progress event. */
 export const onProgress = (
-  event: "ollama-install-progress" | "pull-progress",
+  event: "ollama-install-progress" | "pull-progress" | "chat-engine-progress",
   cb: (line: string) => void,
 ): Promise<UnlistenFn> => listen<string>(event, (e) => cb(e.payload));

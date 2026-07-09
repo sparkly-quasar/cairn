@@ -14,6 +14,7 @@
     ensureOpenWebui,
     serverStatus,
     setServerTier,
+    uninstallOpenwebui,
     qrSvg,
     openChat,
     onProgress,
@@ -23,6 +24,7 @@
     type Bundle,
     type ServerStatus,
     type BindTier,
+    type UninstallReport,
   } from "$lib/api";
 
   type Mode = "simple" | "explore" | "remote";
@@ -62,6 +64,11 @@
   let chatUrl = $state<string | null>(null);
   let log = $state<string[]>([]);
 
+  // uninstall
+  let showUninstall = $state(false);
+  let uninstalling = $state(false);
+  let uninstallReport = $state<UninstallReport | null>(null);
+
   // app self-update
   let update = $state<Update | null>(null);
   let updateBusy = $state(false);
@@ -83,6 +90,7 @@
     const unlisteners = [
       onProgress("ollama-install-progress", pushLog),
       onProgress("pull-progress", pushLog),
+      onProgress("chat-engine-progress", pushLog),
     ];
     return () => unlisteners.forEach((p) => p.then((u) => u()));
   });
@@ -284,6 +292,21 @@
     mode = returnTo;
   }
 
+  // ---- uninstall ----
+  async function runUninstall() {
+    uninstalling = true;
+    try {
+      uninstallReport = await uninstallOpenwebui();
+    } finally {
+      uninstalling = false;
+    }
+  }
+
+  function closeUninstall() {
+    showUninstall = false;
+    uninstallReport = null;
+  }
+
   // ---- display helpers ----
   const vendorLabel: Record<string, string> = {
     apple: "Apple Silicon (unified memory)",
@@ -365,12 +388,9 @@
             <li><span>Graphics</span><strong>{vendorLabel[profile.gpu_vendor]}{profile.gpu_experimental ? " (experimental)" : ""}</strong></li>
             <li><span>Free disk</span><strong>{gb(profile.free_disk_gb)}</strong></li>
             <li><span>Engine (Ollama)</span><strong class={profile.ollama_present ? "ok" : "warn"}>{profile.ollama_present ? "Ready" : "Will install"}</strong></li>
-            <li><span>Docker</span><strong class={profile.docker_present ? "ok" : "bad"}>{profile.docker_present ? "Ready" : "Not found"}</strong></li>
+            <li><span>Chat app</span><strong class={profile.uv_present ? "ok" : "warn"}>{profile.uv_present ? "Ready" : "Will install"}</strong></li>
           </ul>
-          {#if !profile.docker_present}
-            <p class="notice bad">Docker isn't installed. Cairn needs Docker Desktop to run the chat app. Install it from docker.com, then reopen Cairn.</p>
-          {/if}
-          <button class="primary" onclick={goRecommend} disabled={!profile.docker_present}>Continue</button>
+          <button class="primary" onclick={goRecommend}>Continue</button>
         {/if}
       </section>
     {/if}
@@ -427,10 +447,6 @@
           {#if bundle}<p class="bundle-blurb muted small">{bundle.blurb}</p>{/if}
         {/if}
 
-        {#if !profile?.docker_present}
-          <p class="notice bad">Docker isn't running. Installs are disabled until Docker Desktop is available.</p>
-        {/if}
-
         <div class="grid">
           {#each visibleModels as m (m.id)}
             <article class="mcard {ratingClass(m.rating)}">
@@ -454,7 +470,7 @@
                 {#if installed.has(m.ollama_tag)}
                   <button class="primary small-btn" onclick={() => startInstall(m.ollama_tag, m.display_name)}>Installed · Open</button>
                 {:else}
-                  <button class="primary small-btn" disabled={!profile?.docker_present} onclick={() => requestInstall(m)}>
+                  <button class="primary small-btn" onclick={() => requestInstall(m)}>
                     {m.requires_ack ? "Install…" : "Install"}
                   </button>
                 {/if}
@@ -608,7 +624,47 @@
     </div>
   {/if}
 
-  <footer>Local-first · PolyForm Noncommercial · Cairn</footer>
+  <footer>
+    Local-first · PolyForm Noncommercial · Cairn
+    <span class="sep">·</span>
+    <button class="footer-link" onclick={() => (showUninstall = true)}>Uninstall</button>
+  </footer>
+
+  <!-- ============ UNINSTALL MODAL ============ -->
+  {#if showUninstall}
+    <div class="scrim" role="presentation" onclick={() => !uninstalling && closeUninstall()} onkeydown={(e) => e.key === "Escape" && !uninstalling && closeUninstall()}>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uninstall-title" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+        {#if uninstallReport}
+          <h2 id="uninstall-title" class="ok-title">Uninstalled</h2>
+          <ul class="ack">
+            {#each uninstallReport.removed as line}
+              <li>{line}</li>
+            {/each}
+            {#if uninstallReport.removed.length === 0}
+              <li>Nothing to remove — Cairn wasn't set up on this machine.</li>
+            {/if}
+          </ul>
+          <p class="muted small">{uninstallReport.note}</p>
+          <button class="primary" onclick={closeUninstall}>Done</button>
+        {:else}
+          <h2 id="uninstall-title">Uninstall Cairn?</h2>
+          <p class="muted small">This removes Cairn's chat app and your local data:</p>
+          <ul class="ack">
+            <li>Stops and removes the chat app (Open WebUI)</li>
+            <li>Deletes your chats, accounts, and settings</li>
+          </ul>
+          <p class="muted small">
+            Your downloaded AI models and the Ollama engine are kept — remove the Ollama
+            app separately if you want that space back. This can't be undone.
+          </p>
+          <button class="danger" onclick={runUninstall} disabled={uninstalling}>
+            {uninstalling ? "Removing…" : "Uninstall"}
+          </button>
+          <button class="ghost" onclick={closeUninstall} disabled={uninstalling}>Cancel</button>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -858,4 +914,19 @@
   .update-banner button { width: auto; margin: 0; padding: 0.45rem 0.9rem; font-size: 0.85rem; }
 
   footer { margin-top: auto; padding-top: 1.5rem; color: var(--muted); font-size: 0.8rem; }
+  footer .sep { margin: 0 0.15rem; }
+  .footer-link {
+    background: none; border: none; padding: 0; margin: 0;
+    color: var(--muted); font: inherit; font-size: 0.8rem; cursor: pointer;
+    text-decoration: underline;
+  }
+  .footer-link:hover { color: var(--ink); }
+
+  .modal h2.ok-title { color: var(--ok); }
+  .danger {
+    display: block; width: 100%; margin-top: 1.3rem;
+    background: var(--bad); color: #fff; border-color: var(--bad);
+  }
+  .danger:hover { filter: brightness(1.06); }
+  .danger:disabled { opacity: 0.55; cursor: progress; }
 </style>

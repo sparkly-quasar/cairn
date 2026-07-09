@@ -6,7 +6,8 @@ Cairn sits between GPT4All and Jan.ai in simplicity, with a power-user "engine
 room" underneath. It detects your hardware, installs and manages a local model
 engine, and gives you a private chat app — with nothing leaving your computer.
 
-> **Status:** Phase 3. Simple mode + Explore catalog + Remote access. macOS + Linux.
+> **Status:** Phase 3. Simple mode + Explore catalog + Remote access. No Docker —
+> Cairn installs the engines it manages. macOS + Linux.
 
 ## Mission
 
@@ -37,19 +38,21 @@ does **not** bundle:
 ```
 Cairn (Tauri + Svelte)
   ├── manages → Ollama   (native, localhost:11434, Metal / CUDA / ROCm — full GPU)
-  └── manages → Open WebUI (Docker, auto-picked free port)
-                   └── connects to Ollama via host.docker.internal:11434
+  └── manages → Open WebUI (native, run via uv, auto-picked free port)
+                   └── connects to Ollama via 127.0.0.1:11434
 ```
 
-Ollama runs **natively** (not in Docker) so it can reach the GPU — Docker can't
-access Metal on Apple Silicon. Open WebUI runs in Docker for a reliable chat UI.
+Both engines run **natively** — no Docker, no VM. Ollama runs natively so it can
+reach the GPU (Docker can't access Metal on Apple Silicon), and Open WebUI is run
+with [uv](https://docs.astral.sh/uv/), which Cairn installs for you if it's missing.
+Nothing to set up by hand.
 
 ## What it does
 
 **Simple mode** — a guided, one-path setup:
 
 1. **Detects your hardware** — RAM, GPU/VRAM budget (Apple Silicon unified memory,
-   NVIDIA CUDA, AMD ROCm, or CPU-only), free disk, and whether Docker/Ollama are present.
+   NVIDIA CUDA, AMD ROCm, or CPU-only), free disk, and whether the engines are present.
 2. **Recommends one model** for your hardware tier, with a 🟢/🟡/🔴 "will it run?" rating.
 3. **Sets everything up** — installs Ollama if needed, downloads the model, and
    launches Open WebUI on a free port.
@@ -70,15 +73,19 @@ access Metal on Apple Silicon. Open WebUI runs in Docker for a reliable chat UI.
   is reachable off-machine unless you opt in.
 - Three explained **binding tiers**: 🔒 Private (this computer), 🏠 Local network
   (devices on your Wi-Fi), 🌐 Tailscale (your devices anywhere, encrypted).
-- Switching tier rebinds the container; the active address is shown with a **QR code**
-  to scan from a companion/remote client. Tailscale is detect-and-guide (Cairn reads
-  `tailscale status` but never logs you in).
+- Switching tier restarts the chat app on the new address; the active address is shown
+  with a **QR code** to scan from a companion/remote client. Tailscale is
+  detect-and-guide (Cairn reads `tailscale status` but never logs you in).
+
+**Uninstall** — a one-button cleanup (footer → Uninstall) stops the chat app, removes
+it and its files, and deletes your local chats/accounts/settings. Your Ollama models
+are kept. (Dragging the app to the Trash alone won't remove the managed pieces.)
 
 ## Requirements
 
 - macOS (Apple Silicon or Intel) or Linux
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (for the chat UI)
-- Internet connection for the initial download (runs offline afterward)
+- Internet connection for the initial setup (Cairn installs the engines on first run,
+  then runs offline afterward)
 
 ## Install
 
@@ -92,11 +99,12 @@ Prebuilt installers are attached to each
 - **Linux** — download the `.AppImage` (make it executable and run it), or the `.deb`
   / `.rpm` for your distribution.
 
-You'll still need Docker running for the chat UI (see Requirements).
+On first launch Cairn installs the engines it needs (Ollama and, via uv, Open WebUI),
+so you just need an internet connection for that initial setup.
 
 **To update:** download the latest release and install it over the old version.
-Cairn only *manages* Ollama and the Open WebUI container — your models and chat
-history live in those (not in the Cairn app), so updating Cairn won't touch them.
+Cairn only *manages* Ollama and Open WebUI — your models and chat history live in
+those (not in the Cairn app), so updating Cairn won't touch them.
 **From the next release on, Cairn checks for updates on launch** and offers to
 install them in place ("Install & restart") — signed and verified, fully in-app.
 (Releases up to v0.3.1 predate the updater, so update once manually; after that it's
@@ -114,7 +122,7 @@ npm run tauri build    # produce a .dmg / AppImage / .deb / .rpm
 Project layout:
 
 - `src-tauri/src/spec/` — hardware detection (`SystemProfile`)
-- `src-tauri/src/engine/` — Ollama + Open WebUI lifecycle (per-tier container binding)
+- `src-tauri/src/engine/` — Ollama + Open WebUI lifecycle (native, run via uv; per-tier host binding)
 - `src-tauri/src/server.rs` — remote-access binding tiers, Tailscale/LAN discovery, QR
 - `src-tauri/src/rating.rs` — shared "will it run?" 🟢/🟡/🔴 rating logic
 - `src-tauri/src/recommend.rs` — hardware-tier single-pick (Simple mode)
@@ -128,8 +136,9 @@ Project layout:
   medical-use disclaimers).
 - **Phase 3** ✅ — server mode (Private / LAN / Tailscale) for remote access from the
   Conduit app, with per-tier binding and QR pairing.
-- **Phase 4** — advanced mode (quantization, context length, logs), and a bundled
-  Python sidecar to drop the Docker dependency. App self-update via Tauri's updater.
+- **Docker dependency dropped** ✅ — Open WebUI now runs natively via uv (installed
+  automatically), plus a one-button uninstall. App self-update via Tauri's updater.
+- **Phase 4** — advanced mode (quantization, context length, logs).
 
 ## License
 

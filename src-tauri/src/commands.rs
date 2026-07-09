@@ -4,7 +4,7 @@
 //! via events (`ollama-install-progress`, `pull-progress`).
 
 use crate::catalog::{self, Bundle, RatedModel};
-use crate::engine::{self, ollama, openwebui};
+use crate::engine::{ollama, openwebui_native};
 use crate::recommend::{self, Recommendation};
 use crate::server::{self, BindTier, ServerStatus};
 use crate::spec::{self, SystemProfile};
@@ -44,11 +44,6 @@ pub async fn is_model_present(tag: String) -> bool {
 }
 
 #[tauri::command]
-pub fn docker_running() -> bool {
-    engine::docker_running()
-}
-
-#[tauri::command]
 pub async fn install_ollama(app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || ollama::install(&app))
         .await
@@ -63,24 +58,31 @@ pub async fn pull_model(app: AppHandle, tag: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn ensure_openwebui() -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(openwebui::ensure)
+pub async fn ensure_openwebui(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || openwebui_native::ensure(&app))
         .await
         .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn server_status() -> ServerStatus {
-    tauri::async_runtime::spawn_blocking(openwebui::current_status)
+    tauri::async_runtime::spawn_blocking(openwebui_native::current_status)
         .await
         .expect("server status panicked")
 }
 
 #[tauri::command]
-pub async fn set_server_tier(tier: BindTier) -> Result<ServerStatus, String> {
-    tauri::async_runtime::spawn_blocking(move || openwebui::set_tier(tier))
+pub async fn set_server_tier(app: AppHandle, tier: BindTier) -> Result<ServerStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || openwebui_native::set_tier(&app, tier))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn uninstall_openwebui() -> openwebui_native::UninstallReport {
+    tauri::async_runtime::spawn_blocking(openwebui_native::uninstall)
+        .await
+        .expect("uninstall panicked")
 }
 
 #[tauri::command]

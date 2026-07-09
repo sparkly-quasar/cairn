@@ -97,7 +97,9 @@ jobs:
 
             **Linux:** use the .AppImage (portable), or the .deb / .rpm for your distro.
 
-            You'll also need Docker running for the chat UI.
+            No Docker needed — Cairn installs the engines it manages (Ollama and, via
+            uv, Open WebUI) on first run. You just need an internet connection for that
+            initial setup.
           releaseDraft: true
           # Published as a normal (non-prerelease) "latest" release so the
           # updater endpoint (/releases/latest/download/latest.json) resolves.

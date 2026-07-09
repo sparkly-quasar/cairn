@@ -24,7 +24,9 @@ pub struct SystemProfile {
     pub vram_gb: f64,
     pub cpu_cores: u32,
     pub free_disk_gb: f64,
-    pub docker_present: bool,
+    /// Whether the runtime that powers the chat app (uv) is already installed.
+    /// Informational only — Cairn installs it during setup if missing.
+    pub uv_present: bool,
     pub ollama_present: bool,
     /// True when GPU support is unproven (e.g. AMD without a working ROCm stack).
     pub gpu_experimental: bool,
@@ -57,7 +59,7 @@ pub fn detect() -> SystemProfile {
         vram_gb: round1(gpu.vram_gb),
         cpu_cores,
         free_disk_gb,
-        docker_present: crate::engine::docker_present(),
+        uv_present: crate::engine::openwebui_native::uv_present(),
         ollama_present: crate::engine::ollama::is_present(),
         gpu_experimental: gpu.experimental,
     }
