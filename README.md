@@ -102,13 +102,15 @@ Prebuilt installers are attached to each
 On first launch Cairn installs the engines it needs (Ollama and, via uv, Open WebUI),
 so you just need an internet connection for that initial setup.
 
-**To update:** download the latest release and install it over the old version.
-Cairn only *manages* Ollama and Open WebUI — your models and chat history live in
-those (not in the Cairn app), so updating Cairn won't touch them.
-**From the next release on, Cairn checks for updates on launch** and offers to
-install them in place ("Install & restart") — signed and verified, fully in-app.
-(Releases up to v0.3.1 predate the updater, so update once manually; after that it's
-automatic.)
+**Updates are automatic.** Cairn checks on launch and, when a new version is out,
+offers to install it in place — one click on **"Install & restart"**, signed and
+verified, fully in-app. There's nothing to re-download.
+
+Your models and chat history are never touched: Cairn only *manages* Ollama and Open
+WebUI, and your data lives in those, not in the Cairn app.
+
+*(One-time exception: builds from before the updater existed — v0.3.1 or earlier —
+need a single manual update to the latest release; auto-updates take over after that.)*
 
 ## Development
 
