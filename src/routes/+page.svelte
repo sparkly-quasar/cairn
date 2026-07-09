@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0 -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { check, type Update } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import {
@@ -12,6 +12,7 @@
     installOllama,
     pullModel,
     ensureOpenWebui,
+    chatReady,
     serverStatus,
     setServerTier,
     uninstallOpenwebui,
@@ -62,7 +63,37 @@
   let returnTo = $state<Mode>("simple");
   let setupError = $state<string | null>(null);
   let chatUrl = $state<string | null>(null);
+  let assistantReady = $state(false);
+  let readyPoll: ReturnType<typeof setInterval> | null = null;
   let log = $state<string[]>([]);
+
+  // The chat server (Open WebUI) often keeps booting after setup "finishes" —
+  // first launch downloads models and imports heavy libraries before it answers.
+  // Poll until it's actually reachable, then enable the "Open my assistant"
+  // button, so we never open a dead URL and make it look like the app failed.
+  function watchAssistant() {
+    stopWatchingAssistant();
+    assistantReady = false;
+    const tick = async () => {
+      try {
+        if (await chatReady()) {
+          assistantReady = true;
+          stopWatchingAssistant();
+        }
+      } catch {
+        // transient — keep polling
+      }
+    };
+    void tick();
+    readyPoll = setInterval(tick, 2000);
+  }
+  function stopWatchingAssistant() {
+    if (readyPoll) {
+      clearInterval(readyPoll);
+      readyPoll = null;
+    }
+  }
+  onDestroy(stopWatchingAssistant);
 
   // uninstall
   let showUninstall = $state(false);
@@ -280,6 +311,7 @@
       setTask("webui", "done");
 
       phase = "done";
+      watchAssistant();
     } catch (err) {
       const active = tasks.find((t) => t.status === "active");
       if (active) setTask(active.key, "error");
@@ -288,6 +320,7 @@
   }
 
   function finishInstall() {
+    stopWatchingAssistant();
     phase = "browse";
     mode = returnTo;
   }
@@ -600,8 +633,15 @@
     <section class="card success">
       <div class="check">✓</div>
       <h2>You're all set</h2>
-      <p>{target?.name ?? "Your assistant"} is ready. Click below to start chatting in your browser.</p>
-      <button class="primary" onclick={() => chatUrl && openChat(chatUrl)}>Open my assistant</button>
+      {#if assistantReady}
+        <p>{target?.name ?? "Your assistant"} is ready. Click below to start chatting in your browser.</p>
+        <button class="primary" onclick={() => chatUrl && openChat(chatUrl)}>Open my assistant</button>
+      {:else}
+        <p>The chat assistant is starting — please wait. The first time can take a couple of minutes while it finishes setting up.</p>
+        <button class="primary" disabled>
+          <span class="spin" aria-hidden="true"></span> Starting…
+        </button>
+      {/if}
       {#if chatUrl}<p class="muted small">Running at {chatUrl}</p>{/if}
       <button class="ghost" onclick={finishInstall}>{returnTo === "explore" ? "Back to catalog" : "Done"}</button>
     </section>
@@ -764,6 +804,18 @@
   }
   .primary:hover { filter: brightness(1.06); }
   .primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .spin {
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+    margin-right: 0.4em;
+    vertical-align: -0.05em;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .ghost {
     display: block; width: 100%; margin-top: 0.6rem;
     background: transparent; color: var(--muted); border-color: var(--line);

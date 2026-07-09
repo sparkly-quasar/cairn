@@ -24,6 +24,7 @@ pub fn run() {
             commands::install_ollama,
             commands::pull_model,
             commands::ensure_openwebui,
+            commands::chat_ready,
             commands::server_status,
             commands::set_server_tier,
             commands::uninstall_openwebui,

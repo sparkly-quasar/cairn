@@ -64,6 +64,15 @@ pub async fn ensure_openwebui(app: AppHandle) -> Result<String, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// True once the chat server answers on its port — the UI polls this to enable
+/// the "Open my assistant" button instead of opening a not-yet-live URL.
+#[tauri::command]
+pub async fn chat_ready() -> bool {
+    tauri::async_runtime::spawn_blocking(openwebui_native::is_ready)
+        .await
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn server_status() -> ServerStatus {
     tauri::async_runtime::spawn_blocking(openwebui_native::current_status)

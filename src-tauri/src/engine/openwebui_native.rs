@@ -186,6 +186,13 @@ pub fn set_tier(app: &AppHandle, tier: BindTier) -> Result<ServerStatus, String>
     Ok(server::status(tier, running_port()))
 }
 
+/// Whether the chat server is actually answering on its saved port — i.e. the
+/// browser can reach it right now. Used to gate the "Open my assistant" button
+/// so we never open a URL for a server that's still booting.
+pub fn is_ready() -> bool {
+    running_port().is_some()
+}
+
 /// Current server status for the Remote-access UI.
 pub fn current_status() -> ServerStatus {
     let tier = server::saved_tier();

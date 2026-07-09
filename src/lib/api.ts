@@ -92,6 +92,7 @@ export const isModelPresent = (tag: string) => invoke<boolean>("is_model_present
 export const installOllama = () => invoke<void>("install_ollama");
 export const pullModel = (tag: string) => invoke<void>("pull_model", { tag });
 export const ensureOpenWebui = () => invoke<string>("ensure_openwebui");
+export const chatReady = () => invoke<boolean>("chat_ready");
 export const serverStatus = () => invoke<ServerStatus>("server_status");
 export const setServerTier = (tier: BindTier) => invoke<ServerStatus>("set_server_tier", { tier });
 export const uninstallOpenwebui = () => invoke<UninstallReport>("uninstall_openwebui");
