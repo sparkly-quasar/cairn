@@ -1,6 +1,6 @@
 [package]
 name = "cairn"
-version = "0.5.1"
+version = "0.5.2"
 description = "Cairn — a guided installer for running a local LLM privately on your machine"
 authors = ["sparkly-quasar"]
 # Licensed under the PolyForm Noncommercial License 1.0.0 — see ../LICENSE.
