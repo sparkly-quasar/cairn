@@ -243,6 +243,29 @@
       "requires_ack": null
     },
     {
+      "id": "medgemma-4b",
+      "display_name": "MedGemma 4B",
+      "ollama_tag": "medgemma:4b",
+      "params": "4B",
+      "disk_gb": 3.3,
+      "min_ram_gb": 8.0,
+      "min_vram_gb": 5.0,
+      "capabilities": ["medical", "vision", "chat"],
+      "use_cases": ["medical"],
+      "blurb": "A compact health-domain model from Google that can also read medical images — for research and education. Runs on modest hardware.",
+      "license": "Health AI Developer Foundations Terms",
+      "library_url": "https://ollama.com/library/medgemma",
+      "requires_ack": {
+        "headline": "For research and education only — not medical advice",
+        "points": [
+          "MedGemma is not a medical device and is not a substitute for a qualified clinician.",
+          "Its output may be inaccurate or incomplete and must not be used to diagnose or treat anyone.",
+          "Do not enter real patient-identifying information.",
+          "Always consult a licensed healthcare professional for medical decisions."
+        ]
+      }
+    },
+    {
       "id": "medgemma-27b",
       "display_name": "MedGemma 27B",
       "ollama_tag": "medgemma:27b",
