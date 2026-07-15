@@ -74,8 +74,7 @@ pub struct ServerStatus {
 // ---- tier persistence (a single line in the app config dir) ----
 
 fn tier_file() -> Option<std::path::PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    Some(std::path::PathBuf::from(home).join(".cairn").join("server-tier"))
+    Some(crate::util::home_dir()?.join(".cairn").join("server-tier"))
 }
 
 /// The tier the user last chose; defaults to Private (safest) on first run.

@@ -6,27 +6,47 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use tauri::{AppHandle, Emitter};
 
+/// The user's home directory: `HOME` on Unix, `USERPROFILE` on Windows.
+pub fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 /// Build a `Command` with an enriched `PATH`. GUI apps launched from Finder or
 /// the Dock inherit only launchd's bare `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`),
 /// so tools installed by Homebrew (`/opt/homebrew/bin`) or `uv`/pipx
 /// (`~/.local/bin`) — like `ollama`, `brew`, and `uv` — are invisible and every
 /// spawn fails. Prepending the usual install dirs makes them resolvable whether
 /// the app runs from a terminal (dev) or the Dock (bundled).
+///
+/// On Windows the equivalent problem is a PATH that was extended by an
+/// installer (Ollama, uv) *after* Cairn started — the running process never
+/// sees the update — so we prepend those tools' default install dirs too.
+/// Console-window suppression: every helper we run (`nvidia-smi`, `taskkill`,
+/// PowerShell, …) would otherwise flash a console window over the GUI, so all
+/// commands are created with `CREATE_NO_WINDOW`.
 pub fn command(cmd: &str) -> Command {
     let mut c = Command::new(cmd);
     c.env("PATH", enriched_path());
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        c.creation_flags(CREATE_NO_WINDOW);
+    }
     c
 }
 
-/// The inherited `PATH` with common Homebrew/user-local bin dirs prepended.
+/// The inherited `PATH` with common tool install dirs prepended.
 /// Non-existent dirs are harmless; existing entries are preserved after ours.
 fn enriched_path() -> OsString {
     let mut dirs: Vec<PathBuf> = Vec::new();
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        dirs.push(home.join(".local/bin"));
-        dirs.push(home.join(".cargo/bin"));
+    if let Some(home) = home_dir() {
+        dirs.push(home.join(".local").join("bin"));
+        dirs.push(home.join(".cargo").join("bin"));
     }
+    #[cfg(not(target_os = "windows"))]
     for d in [
         "/opt/homebrew/bin",
         "/opt/homebrew/sbin",
@@ -37,6 +57,16 @@ fn enriched_path() -> OsString {
         "/sbin",
     ] {
         dirs.push(PathBuf::from(d));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Per-user installer locations that an already-running Cairn won't have
+        // in its inherited PATH yet.
+        if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+            dirs.push(local.join("Programs").join("Ollama"));
+            dirs.push(local.join("Microsoft").join("WindowsApps")); // winget shims
+        }
+        dirs.push(PathBuf::from(r"C:\Program Files\Tailscale"));
     }
     if let Some(existing) = std::env::var_os("PATH") {
         dirs.extend(std::env::split_paths(&existing));
@@ -53,6 +83,16 @@ pub fn run(cmd: &str, args: &[&str]) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Run a PowerShell one-liner (Windows helpers: hardware probes, port lookup).
+/// Same contract as [`run`]: trimmed stdout on success, else `None`.
+#[cfg(target_os = "windows")]
+pub fn run_powershell(script: &str) -> Option<String> {
+    run(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-Command", script],
+    )
 }
 
 /// Spawn a child, stream its stdout+stderr line-by-line to `event`, and wait.

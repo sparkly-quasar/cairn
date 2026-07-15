@@ -7,7 +7,7 @@ room" underneath. It detects your hardware, installs and manages a local model
 engine, and gives you a private chat app — with nothing leaving your computer.
 
 > **Status:** Phase 3. Simple mode + Explore catalog + Remote access. No Docker —
-> Cairn installs the engines it manages. macOS + Linux.
+> Cairn installs the engines it manages. macOS + Windows + Linux.
 
 ## Mission
 
@@ -79,11 +79,12 @@ Nothing to set up by hand.
 
 **Uninstall** — a one-button cleanup (footer → Uninstall) stops the chat app, removes
 it and its files, and deletes your local chats/accounts/settings. Your Ollama models
-are kept. (Dragging the app to the Trash alone won't remove the managed pieces.)
+are kept. (Dragging the app to the Trash — or uninstalling it from Windows Settings —
+alone won't remove the managed pieces.)
 
 ## Requirements
 
-- macOS (Apple Silicon or Intel) or Linux
+- macOS (Apple Silicon or Intel), Windows 10/11 (x64), or Linux
 - Internet connection for the initial setup (Cairn installs the engines on first run,
   then runs offline afterward)
 
@@ -96,6 +97,9 @@ Prebuilt installers are attached to each
   builds aren't notarized yet, so on first launch **right-click the app and choose
   Open** (or run `xattr -dr com.apple.quarantine /Applications/Cairn.app`) to get past
   Gatekeeper. It opens normally after that.
+- **Windows** — download and run the `-setup.exe` installer (or the `.msi`). The
+  builds aren't code-signed yet, so SmartScreen may warn on first run — click
+  **More info → Run anyway**. Windows 10/11, 64-bit.
 - **Linux** — download the `.AppImage` (make it executable and run it), or the `.deb`
   / `.rpm` for your distribution.
 
@@ -118,7 +122,7 @@ need a single manual update to the latest release; auto-updates take over after 
 # Prerequisites: Rust (rustup) and Node.js
 npm install
 npm run tauri dev      # launch the app in dev mode
-npm run tauri build    # produce a .dmg / AppImage / .deb / .rpm
+npm run tauri build    # produce a .dmg / -setup.exe + .msi / AppImage + .deb + .rpm
 ```
 
 Project layout:
@@ -140,6 +144,8 @@ Project layout:
   Conduit app, with per-tier binding and QR pairing.
 - **Docker dependency dropped** ✅ — Open WebUI now runs natively via uv (installed
   automatically), plus a one-button uninstall. App self-update via Tauri's updater.
+- **Windows support** ✅ — NSIS + MSI installers, winget-driven Ollama install,
+  NVIDIA (CUDA) detection; AMD is flagged experimental on Windows.
 - **Phase 4** — advanced mode (quantization, context length, logs).
 
 ## License

@@ -8,6 +8,8 @@ use serde::Serialize;
 mod macos;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "windows")]
+mod windows;
 
 /// The machine profile surfaced to the UI. All fields are best-effort:
 /// a probe that fails degrades gracefully rather than aborting detection.
@@ -75,7 +77,12 @@ fn detect_gpu(ram_gb: f64) -> GpuInfo {
         let _ = ram_gb;
         linux::detect_gpu()
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    {
+        let _ = ram_gb;
+        windows::detect_gpu()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         let _ = ram_gb;
         GpuInfo {
@@ -108,25 +115,49 @@ fn detect_ram_gb() -> f64 {
             .map(|kb| kb * 1024.0 / 1e9)
             .unwrap_or(0.0)
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    {
+        crate::util::run_powershell(
+            "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory",
+        )
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|bytes| bytes as f64 / 1e9)
+        .unwrap_or(0.0)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         0.0
     }
 }
 
-/// Free space on the volume backing $HOME, via `df -k` (available column, index 3).
-/// Works identically on macOS and Linux.
+/// Free space on the volume backing the user's home directory.
 fn detect_free_disk_gb() -> f64 {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
-    crate::util::run("df", &["-k", &home])
-        .and_then(|out| {
-            out.lines().last().and_then(|line| {
-                let fields: Vec<&str> = line.split_whitespace().collect();
-                fields.get(3).and_then(|v| v.parse::<f64>().ok())
+    #[cfg(not(target_os = "windows"))]
+    {
+        // `df -k` available column (index 3) — identical on macOS and Linux.
+        let home = crate::util::home_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "/".to_string());
+        crate::util::run("df", &["-k", &home])
+            .and_then(|out| {
+                out.lines().last().and_then(|line| {
+                    let fields: Vec<&str> = line.split_whitespace().collect();
+                    fields.get(3).and_then(|v| v.parse::<f64>().ok())
+                })
             })
-        })
-        .map(|kb| kb * 1024.0 / 1e9)
+            .map(|kb| kb * 1024.0 / 1e9)
+            .unwrap_or(0.0)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Free bytes on the drive holding the user profile (usually C:).
+        crate::util::run_powershell(
+            "(Get-PSDrive -Name (Split-Path -Qualifier $env:USERPROFILE).TrimEnd(':')).Free",
+        )
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|bytes| bytes as f64 / 1e9)
         .unwrap_or(0.0)
+    }
 }
 
 fn round1(v: f64) -> f64 {

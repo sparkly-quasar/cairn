@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Noncommercial-1.0.0
 # Build installable binaries and attach them to a GitHub Release on every v* tag.
 #
-# macOS  → universal .dmg (Apple Silicon + Intel). Code-signing + notarization
-#          happen automatically IF the APPLE_* secrets are set; otherwise the
-#          .dmg is unsigned (users right-click → Open the first time).
-# Linux  → .AppImage / .deb / .rpm (no signing gate).
+# macOS   → universal .dmg (Apple Silicon + Intel). Code-signing + notarization
+#           happen automatically IF the APPLE_* secrets are set; otherwise the
+#           .dmg is unsigned (users right-click → Open the first time).
+# Windows → NSIS .exe installer + .msi. Unsigned, so SmartScreen shows
+#           "More info → Run anyway" on first launch.
+# Linux   → .AppImage / .deb / .rpm (no signing gate).
 name: Release
 
 on:
@@ -24,6 +26,9 @@ jobs:
             args: "--target universal-apple-darwin"
             rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
           - platform: ubuntu-22.04
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest
             args: ""
             rust-targets: ""
     runs-on: ${{ matrix.platform }}
@@ -94,6 +99,10 @@ jobs:
             3. Click **Privacy & Security** in the left sidebar.
             4. Scroll to the **Security** section — you'll see a message that the app was blocked.
             5. Click **Open Anyway**, enter your Mac's login password, and click **OK**.
+
+            **Windows:** use the `-setup.exe` installer (or the `.msi`). The build isn't
+            code-signed yet, so SmartScreen may warn on first run — click **More info →
+            Run anyway**.
 
             **Linux:** use the .AppImage (portable), or the .deb / .rpm for your distro.
 

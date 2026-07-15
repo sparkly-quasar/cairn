@@ -106,7 +106,11 @@ pub fn open_chat(url: String) -> Result<(), String> {
     let spawned = std::process::Command::new("open").arg(&url).spawn();
     #[cfg(target_os = "linux")]
     let spawned = std::process::Command::new("xdg-open").arg(&url).spawn();
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    // `start` is a cmd built-in; the empty "" is its window-title slot so the
+    // URL isn't mistaken for a title. util::command suppresses the console.
+    #[cfg(target_os = "windows")]
+    let spawned = crate::util::command("cmd").args(["/C", "start", "", &url]).spawn();
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     let spawned: std::io::Result<std::process::Child> =
         Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "unsupported platform"));
 

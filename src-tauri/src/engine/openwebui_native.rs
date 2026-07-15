@@ -41,8 +41,7 @@ pub const PROGRESS_EVENT: &str = "chat-engine-progress";
 // ---- paths & persisted state (all under ~/.cairn, alongside server-tier) ----
 
 fn cairn_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
+    crate::util::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".cairn")
 }
@@ -83,15 +82,16 @@ fn launched_host() -> Option<String> {
 // ---- uv discovery / provisioning ----
 
 /// Locate the `uv` binary: PATH first, then the standard standalone-installer
-/// location (`~/.local/bin`), then common package-manager paths.
+/// location (`~/.local/bin` on every OS), then common package-manager paths.
 fn uv_bin() -> Option<String> {
     if crate::util::run("uv", &["--version"]).is_some() {
         return Some("uv".into());
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    let home = crate::util::home_dir()?;
+    let exe = if cfg!(target_os = "windows") { "uv.exe" } else { "uv" };
     [
-        home.join(".local/bin/uv"),
-        home.join(".cargo/bin/uv"),
+        home.join(".local").join("bin").join(exe),
+        home.join(".cargo").join("bin").join(exe),
         PathBuf::from("/opt/homebrew/bin/uv"),
         PathBuf::from("/usr/local/bin/uv"),
     ]
@@ -122,10 +122,27 @@ fn ensure_uv(app: &AppHandle) -> Result<String, String> {
         )?;
         uv_bin().ok_or_else(|| "Installed uv but couldn't locate it afterward.".to_string())
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    {
+        // Official standalone installer → %USERPROFILE%\.local\bin, no admin.
+        run_streamed(
+            app,
+            "powershell",
+            &[
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "ByPass",
+                "-Command",
+                "irm https://astral.sh/uv/install.ps1 | iex",
+            ],
+            PROGRESS_EVENT,
+        )?;
+        uv_bin().ok_or_else(|| "Installed uv but couldn't locate it afterward.".to_string())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         let _ = app;
-        Err("Automatic chat-app setup is only supported on macOS and Linux.".into())
+        Err("Automatic chat-app setup is only supported on macOS, Windows, and Linux.".into())
     }
 }
 
@@ -237,13 +254,18 @@ pub fn uninstall() -> UninstallReport {
         removed.push("Deleted your chats, accounts, and settings".into());
     }
 
+    let remove_app_hint = if cfg!(target_os = "windows") {
+        "You can now uninstall Cairn from Windows Settings → Apps."
+    } else {
+        "You can now drag Cairn to the Trash."
+    };
     UninstallReport {
         removed,
-        note: "Your AI models and the Ollama engine were left in place — they can \
-               be large and may be used by other apps. Remove the Ollama app \
-               separately if you'd like that space back. You can now drag Cairn to \
-               the Trash."
-            .into(),
+        note: format!(
+            "Your AI models and the Ollama engine were left in place — they can \
+             be large and may be used by other apps. Remove the Ollama app \
+             separately if you'd like that space back. {remove_app_hint}"
+        ),
     }
 }
 
@@ -305,7 +327,7 @@ fn stop() {
     if let Ok(pid) = fs::read_to_string(pid_file()) {
         let pid = pid.trim();
         if !pid.is_empty() {
-            let _ = crate::util::run("kill", &[pid]);
+            kill_pid(pid, false);
         }
     }
     if let Some(p) = port {
@@ -318,21 +340,57 @@ fn stop() {
     clear_state();
 }
 
-/// Kill every process listening on `port` (SIGTERM, then SIGKILL if it lingers).
-fn kill_port(port: u16) {
-    let filter = format!("tcp:{port}");
-    let listeners = || crate::util::run("lsof", &["-ti", &filter, "-sTCP:LISTEN"]);
-
-    if let Some(out) = listeners() {
-        for pid in out.lines().map(str::trim).filter(|s| !s.is_empty()) {
+/// Terminate a PID. Unix: SIGTERM, or SIGKILL when `force`. Windows: taskkill
+/// with `/T` so the uv → python process tree goes down together (`/F` is
+/// required for anything without a window to actually terminate).
+fn kill_pid(pid: &str, force: bool) {
+    #[cfg(not(target_os = "windows"))]
+    {
+        if force {
+            let _ = crate::util::run("kill", &["-9", pid]);
+        } else {
             let _ = crate::util::run("kill", &[pid]);
         }
-        std::thread::sleep(Duration::from_millis(400));
-        if let Some(out) = listeners() {
-            for pid in out.lines().map(str::trim).filter(|s| !s.is_empty()) {
-                let _ = crate::util::run("kill", &["-9", pid]);
-            }
-        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = force;
+        let _ = crate::util::run("taskkill", &["/PID", pid, "/T", "/F"]);
+    }
+}
+
+/// PIDs listening on `port` (lsof on Unix, Get-NetTCPConnection on Windows).
+fn port_listeners(port: u16) -> Vec<String> {
+    #[cfg(not(target_os = "windows"))]
+    let out = crate::util::run("lsof", &["-ti", &format!("tcp:{port}"), "-sTCP:LISTEN"]);
+    #[cfg(target_os = "windows")]
+    let out = crate::util::run_powershell(&format!(
+        "(Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue \
+         | Select-Object -ExpandProperty OwningProcess -Unique) -join \"`n\""
+    ));
+
+    out.map(|s| {
+        s.lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+/// Kill every process listening on `port` (gently, then forcefully if it lingers).
+fn kill_port(port: u16) {
+    let pids = port_listeners(port);
+    if pids.is_empty() {
+        return;
+    }
+    for pid in &pids {
+        kill_pid(pid, false);
+    }
+    std::thread::sleep(Duration::from_millis(400));
+    for pid in port_listeners(port) {
+        kill_pid(&pid, true);
     }
 }
 
